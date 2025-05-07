@@ -1489,6 +1489,9 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_acceleration: accelRosDecoder(an_packet);
 				break;
 
+			case packet_id_body_acceleration: bodyAccelRosDecoder(an_packet);
+				break;
+
 			case packet_id_euler_orientation_standard_deviation: eulerOrientSDRosDriver(an_packet);
 				break;
 
@@ -1846,7 +1849,34 @@ void Driver::accelRosDecoder(an_packet_t* an_packet) {
 	RCLCPP_DEBUG(this->get_logger(), "Packet 37:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P37_num_++, diff/1000);
 }
 
+/**
+ * @brief Function to decode the Body Acceleration ANPP Packet (ANPP.38).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::bodyAccelRosDecoder(an_packet_t* an_packet) {
+	body_acceleration_packet_t body_acceleration_packet;
 
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 38:\tMutex: L\tAccess: %d", P38_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_body_acceleration_packet(&body_acceleration_packet, an_packet) == 0)
+	 {
+		accel_msg_.accel.linear.x = body_acceleration_packet.acceleration[0];
+		accel_msg_.accel.linear.y = body_acceleration_packet.acceleration[1];
+		accel_msg_.accel.linear.z = body_acceleration_packet.acceleration[2];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 38:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P38_num_++, diff/1000);
+}
 
 /**
  * @brief Function to decode the ECEF Position ANPP Packet (ANPP.33).
