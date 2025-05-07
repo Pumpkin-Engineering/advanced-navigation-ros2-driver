@@ -1088,6 +1088,8 @@ rcl_interfaces::msg::SetParametersResult Driver::validatePacketRequest(const rcl
 			"Usage: [ID1, Rate1, ID2, Rate2, ...]\n";
 	}
 
+	bool position_packet_included = false;
+
 	// Check all elements of the request array
 	for(unsigned int i = 0; i < parameter.as_integer_array().size(); i++) {
 		// if even (ID)
@@ -1100,8 +1102,14 @@ rcl_interfaces::msg::SetParametersResult Driver::validatePacketRequest(const rcl
 			element >= end_configuration_packets) { // above range
 				result.successful = false;
 				ss << "\n[Error] ID: " << element << "\t isn't a valid packet.\n";
+			} else if (element == packet_id_geodetic_position || element == packet_id_ecef_position || element == packet_id_utm_position) {
+				if (position_packet_included) { // position message already requested
+					result.successful = false;
+					ss << "\n[Error] ID: " << element << "\t is an additional position packet. Only one postion packet should be requested.\n";
+				}
+				position_packet_included = true;
 			}
-		}else { // If odd (Period)
+		} else { // If odd (Period)
 			if(element < MIN_PACKET_PERIOD || element > MAX_PACKET_PERIOD) {
 				result.successful = false;
 				ss << "\n[Error] Period: " << element << "\t isn't a valid period.\n";
