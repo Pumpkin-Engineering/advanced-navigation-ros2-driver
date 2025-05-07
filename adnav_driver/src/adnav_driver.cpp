@@ -1473,6 +1473,9 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_ecef_position: ecefPosRosDecoder(an_packet);
 				break;
 
+			case packet_id_utm_position: utmPosRosDecoder(an_packet);
+				break;
+
 			case packet_id_euler_orientation_standard_deviation: eulerOrientSDRosDriver(an_packet);
 				break;
 
@@ -1827,9 +1830,38 @@ void Driver::ecefPosRosDecoder(an_packet_t* an_packet) {
 	// Now that work is complete notify an update for the publisher.
 	msg_write_done_ = true;
 	msg_cv_.notify_one();
-	// RCLCPP_DEBUG(this->get_logger(), "Raw: \tNotifying Complete\t%d", raw_num_++);
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 33:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P33_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the UTM Position ANPP Packet (ANPP.34).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::utmPosRosDecoder(an_packet_t* an_packet) {
+	utm_position_packet_t utm_position_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 34:\tMutex: L\tAccess: %d", P34_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	// UTM Position (in meters) Packet for Pose Message
+	if(decode_utm_position_packet(&utm_position_packet, an_packet) == 0)
+	 {
+		pose_msg_.position.x = utm_position_packet.position[1]; // Easting
+		pose_msg_.position.y = utm_position_packet.position[0]; // Northing
+		pose_msg_.position.z = utm_position_packet.position[2]; // Height
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 34:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P34_num_++, diff/1000);
 }
 
 /**
