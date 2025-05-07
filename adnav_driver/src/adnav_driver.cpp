@@ -1091,6 +1091,7 @@ rcl_interfaces::msg::SetParametersResult Driver::validatePacketRequest(const rcl
 	}
 
 	bool position_packet_included = false;
+	bool acceleration_packet_included = false;
 
 	// Check all elements of the request array
 	for(unsigned int i = 0; i < parameter.as_integer_array().size(); i++) {
@@ -1110,7 +1111,13 @@ rcl_interfaces::msg::SetParametersResult Driver::validatePacketRequest(const rcl
 					ss << "\n[Error] ID: " << element << "\t is an additional position packet. Only one postion packet should be requested.\n";
 				}
 				position_packet_included = true;
-			}
+			} else if (element == packet_id_acceleration || element == packet_id_body_acceleration) {
+				if (acceleration_packet_included) { // acceleration message already requested
+					result.successful = false;
+					ss << "\n[Error] ID: " << element << "\t is an additional acceleration packet. Only one acceleration packet should be requested.\n";
+				}
+				acceleration_packet_included = true;
+			}	
 		} else { // If odd (Period)
 			if(element < MIN_PACKET_PERIOD || element > MAX_PACKET_PERIOD) {
 				result.successful = false;
