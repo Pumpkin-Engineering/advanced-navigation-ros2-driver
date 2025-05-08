@@ -9,6 +9,7 @@ This example is currently able to decode the following packets into ROS messages
 - ANPP 3: Device Information Packet
 - ANPP 20: System State Packet
 - ANPP 21: Unix Time Packet
+- ANPP 24: Position Standard Deviation Packet
 - ANPP 26: Euler Orientation Standard Deviation Packet
 - ANPP 28: Raw Sensors Packet
 - ANPP 33: ECEF Position Packet

@@ -1492,6 +1492,9 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_unix_time: unixTimeRosDecoder(an_packet);
 				break;
 
+			case packet_id_position_standard_deviation: positionSDRosDecoder(an_packet);
+				break;
+
 			case packet_id_ecef_position: ecefPosRosDecoder(an_packet);
 				break;
 
@@ -1866,6 +1869,34 @@ void Driver::unixTimeRosDecoder(an_packet_t* an_packet) {
 	msg_cv_.notify_one();
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 21:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P21_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the Position Standard Deviation ANPP Packet (ANPP.24).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::positionSDRosDecoder(an_packet_t* an_packet) {
+	position_standard_deviation_packet_t position_standard_deviation_packet;
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 24: \tMutex: L\tAccess: %d", P24_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_position_standard_deviation_packet(&position_standard_deviation_packet, an_packet) == 0)
+	 {
+		odom_msg_.pose.covariance[0] = pow(position_standard_deviation_packet.standard_deviation[0], 2);
+		odom_msg_.pose.covariance[7] = pow(position_standard_deviation_packet.standard_deviation[1], 2);
+		odom_msg_.pose.covariance[14] = pow(position_standard_deviation_packet.standard_deviation[2], 2);
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 24:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P24_num_++, diff/1000);
 }
 
 /**

@@ -305,6 +305,7 @@ class Driver : public rclcpp::Node  // Inheriting gives every "this->" as a poin
     void deviceInfoDecoder(an_packet_t* an_packet);
     void systemStateRosDecoder(an_packet_t* an_packet);
     void unixTimeRosDecoder(an_packet_t* an_packet);
+    void positionSDRosDecoder(an_packet_t* an_packet);
     void eulerOrientSDRosDecoder(an_packet_t* an_packet);
     void rawSensorsRosDecoder(an_packet_t* an_packet);
     void ecefPosRosDecoder(an_packet_t* an_packet);
