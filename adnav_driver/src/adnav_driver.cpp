@@ -1501,6 +1501,9 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_utm_position: utmPosRosDecoder(an_packet);
 				break;
 
+			case packet_id_body_velocity: bodyVelocityRosDecoder(an_packet);
+				break;
+
 			case packet_id_acceleration: accelRosDecoder(an_packet);
 				break;
 
@@ -2049,6 +2052,39 @@ void Driver::utmPosRosDecoder(an_packet_t* an_packet) {
 }
 
 /**
+ * @brief Function to decode the Body Velocity ANPP Packet (ANPP.36).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::bodyVelocityRosDecoder(an_packet_t* an_packet) {
+	body_velocity_packet_t body_velocity_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 34:\tMutex: L\tAccess: %d", P34_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_body_velocity_packet(&body_velocity_packet, an_packet) == 0)
+	 {
+		odom_msg_.twist.twist.linear.x = body_velocity_packet.velocity[0];
+		odom_msg_.twist.twist.linear.y = body_velocity_packet.velocity[1];
+		odom_msg_.twist.twist.linear.z = body_velocity_packet.velocity[2];
+		
+		twist_msg_.linear.x = body_velocity_packet.velocity[0];
+		twist_msg_.linear.y = body_velocity_packet.velocity[1];
+		twist_msg_.linear.z = body_velocity_packet.velocity[2];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 34:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P34_num_++, diff/1000);
+}
+
+/**
  * @brief Function to decode the Acceleration ANPP Packet (ANPP.37).
  *
  * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
@@ -2076,6 +2112,7 @@ void Driver::accelRosDecoder(an_packet_t* an_packet) {
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 37:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P37_num_++, diff/1000);
 }
+
 
 /**
  * @brief Function to decode the Body Acceleration ANPP Packet (ANPP.38).

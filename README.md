@@ -14,6 +14,7 @@ This example is currently able to decode the following packets into ROS messages
 - ANPP 28: Raw Sensors Packet
 - ANPP 33: ECEF Position Packet
 - ANPP 34: UTM Position Packet
+- ANPP 36: Body Velocity Packet
 - ANPP 37: Acceleration Packet
 - ANPP 38: Body Acceleration Packet
 - ANPP 43: Angular Acceleration Packet
