@@ -1489,6 +1489,9 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_system_state: systemStateRosDecoder(an_packet);
 				break;
 
+			case packet_id_unix_time: unixTimeRosDecoder(an_packet);
+				break;
+
 			case packet_id_ecef_position: ecefPosRosDecoder(an_packet);
 				break;
 
@@ -1830,6 +1833,39 @@ void Driver::systemStateRosDecoder(an_packet_t* an_packet) {
 	msg_cv_.notify_one();
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 20:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P20_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the Unix Time ANPP Packet (ANPP.21).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::unixTimeRosDecoder(an_packet_t* an_packet) {
+	unix_time_packet_t unix_time_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 21:\tMutex: L\tAccess: %d", P21_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_unix_time_packet(&unix_time_packet, an_packet) == 0)
+	 {
+		imu_msg_.header.stamp.sec = unix_time_packet.unix_time_seconds;
+		imu_msg_.header.stamp.nanosec = unix_time_packet.microseconds*1000;
+		imu_msg_.header.frame_id = frame_id_;
+		
+    odom_msg_.header.stamp.sec = unix_time_packet.unix_time_seconds;
+		odom_msg_.header.stamp.nanosec = unix_time_packet.microseconds*1000;
+		odom_msg_.child_frame_id = frame_id_;
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 21:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P21_num_++, diff/1000);
 }
 
 /**
