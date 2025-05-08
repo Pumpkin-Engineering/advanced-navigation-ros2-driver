@@ -2105,6 +2105,10 @@ void Driver::accelRosDecoder(an_packet_t* an_packet) {
 		accel_msg_.accel.linear.x = acceleration_packet.acceleration[0];
 		accel_msg_.accel.linear.y = acceleration_packet.acceleration[1];
 		accel_msg_.accel.linear.z = acceleration_packet.acceleration[2];
+		
+		imu_msg_.linear_acceleration.x = acceleration_packet.acceleration[0];
+		imu_msg_.linear_acceleration.y = acceleration_packet.acceleration[1];
+		imu_msg_.linear_acceleration.z = acceleration_packet.acceleration[2];
 	}
 	// Now that work is complete notify an update for the publisher.
 	msg_write_done_ = true;
@@ -2112,7 +2116,6 @@ void Driver::accelRosDecoder(an_packet_t* an_packet) {
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 37:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P37_num_++, diff/1000);
 }
-
 
 /**
  * @brief Function to decode the Body Acceleration ANPP Packet (ANPP.38).
@@ -2135,6 +2138,10 @@ void Driver::bodyAccelRosDecoder(an_packet_t* an_packet) {
 		accel_msg_.accel.linear.x = body_acceleration_packet.acceleration[0];
 		accel_msg_.accel.linear.y = body_acceleration_packet.acceleration[1];
 		accel_msg_.accel.linear.z = body_acceleration_packet.acceleration[2];
+		
+		imu_msg_.linear_acceleration.x = body_acceleration_packet.acceleration[0];
+		imu_msg_.linear_acceleration.y = body_acceleration_packet.acceleration[1];
+		imu_msg_.linear_acceleration.z = body_acceleration_packet.acceleration[2];
 	}
 	// Now that work is complete notify an update for the publisher.
 	msg_write_done_ = true;
