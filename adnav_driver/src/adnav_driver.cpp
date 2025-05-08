@@ -1862,12 +1862,20 @@ void Driver::unixTimeRosDecoder(an_packet_t* an_packet) {
 
 	if(decode_unix_time_packet(&unix_time_packet, an_packet) == 0)
 	 {
-		imu_msg_.header.stamp.sec = unix_time_packet.unix_time_seconds;
-		imu_msg_.header.stamp.nanosec = unix_time_packet.microseconds*1000;
-		imu_msg_.header.frame_id = frame_id_;
+		std_msgs::msg::Header header;
+		header.stamp.sec = unix_time_packet.unix_time_seconds;
+		header.stamp.nanosec = unix_time_packet.microseconds*1000;
+		header.frame_id = frame_id_;
+
+		imu_msg_.header = header;
+		imu_raw_msg_.header = header;
+		mag_field_msg_.header = header;
+		nav_fix_msg_.header = header;
+		baro_msg_.header = header;
+		temp_msg_.header = header;
+		accel_msg_.header = header;
 		
-    odom_msg_.header.stamp.sec = unix_time_packet.unix_time_seconds;
-		odom_msg_.header.stamp.nanosec = unix_time_packet.microseconds*1000;
+		odom_msg_.header.stamp = header.stamp;
 		odom_msg_.child_frame_id = frame_id_;
 	}
 	// Now that work is complete notify an update for the publisher.
