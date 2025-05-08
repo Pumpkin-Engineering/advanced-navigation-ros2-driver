@@ -1510,6 +1510,9 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_body_acceleration: bodyAccelRosDecoder(an_packet);
 				break;
 
+			case packet_id_quaternion_orientation: quatOrientationRosDecoder(an_packet);
+				break;
+
 			case packet_id_angular_acceleration: angularAccelRosDecoder(an_packet);
 				break;
 
@@ -2148,6 +2151,46 @@ void Driver::bodyAccelRosDecoder(an_packet_t* an_packet) {
 	msg_cv_.notify_one();
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 38:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P38_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the Quaternion Orientation ANPP Packet (ANPP.40).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::quatOrientationRosDecoder(an_packet_t* an_packet) {
+	quaternion_orientation_packet_t quaternion_orientation_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 40:\tMutex: L\tAccess: %d", P40_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_quaternion_orientation_packet(&quaternion_orientation_packet, an_packet) == 0)
+	 {
+		odom_msg_.pose.pose.orientation.w = quaternion_orientation_packet.orientation[0];
+		odom_msg_.pose.pose.orientation.x = quaternion_orientation_packet.orientation[1];
+		odom_msg_.pose.pose.orientation.y = quaternion_orientation_packet.orientation[2];
+		odom_msg_.pose.pose.orientation.z = quaternion_orientation_packet.orientation[3];
+		
+		pose_msg_.orientation.w = quaternion_orientation_packet.orientation[0];
+		pose_msg_.orientation.x = quaternion_orientation_packet.orientation[1];
+		pose_msg_.orientation.y = quaternion_orientation_packet.orientation[2];
+		pose_msg_.orientation.z = quaternion_orientation_packet.orientation[3];
+		
+		imu_msg_.orientation.w = quaternion_orientation_packet.orientation[0];
+		imu_msg_.orientation.x = quaternion_orientation_packet.orientation[1];
+		imu_msg_.orientation.y = quaternion_orientation_packet.orientation[2];
+		imu_msg_.orientation.z = quaternion_orientation_packet.orientation[3];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 40:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P40_num_++, diff/1000);
 }
 
 /**
