@@ -1930,7 +1930,10 @@ void Driver::eulerOrientSDRosDecoder(an_packet_t* an_packet) {
 
 	if(decode_euler_orientation_standard_deviation_packet(&euler_orientation_standard_deviation_packet, an_packet) == 0)
 	 {
-		// IMU message
+		odom_msg_.pose.covariance[21] = pow(euler_orientation_standard_deviation_packet.standard_deviation[0], 2);
+		odom_msg_.pose.covariance[28] = pow(euler_orientation_standard_deviation_packet.standard_deviation[1], 2);
+		odom_msg_.pose.covariance[35] = pow(euler_orientation_standard_deviation_packet.standard_deviation[2], 2);
+		
 		imu_msg_.orientation_covariance[0] = pow(euler_orientation_standard_deviation_packet.standard_deviation[0], 2);
 		imu_msg_.orientation_covariance[4] = pow(euler_orientation_standard_deviation_packet.standard_deviation[1], 2);
 		imu_msg_.orientation_covariance[8] = pow(euler_orientation_standard_deviation_packet.standard_deviation[2], 2);
