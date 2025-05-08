@@ -179,6 +179,7 @@ void Driver::createPublishers() {
 	accel_pub_ = this->create_publisher<geometry_msgs::msg::AccelStamped>(std::string(node_name_ + "/accel"), 10);
 	system_status_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticStatus>(std::string(node_name_ + "/system_status"), 10);
 	filter_status_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticStatus>(std::string(node_name_ + "/filter_status"), 10);
+	odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(std::string(node_name_ + "/odom"), 10);
 }
 
 /**
@@ -562,6 +563,7 @@ void Driver::publishTimerCallback() {
 	barometric_pressure_pub_->publish(baro_msg_);
 	temperature_pub_->publish(temp_msg_);
 	pose_pub_->publish(pose_msg_);
+	odom_pub_->publish(odom_msg_);
 
 	RCLCPP_DEBUG(this->get_logger(), "Pub: \t\tMutex: U\tAccess: %d", pub_num_++);
 
