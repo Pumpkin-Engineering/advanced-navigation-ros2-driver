@@ -1507,7 +1507,7 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_angular_acceleration: angularAccelRosDecoder(an_packet);
 				break;
 
-			case packet_id_euler_orientation_standard_deviation: eulerOrientSDRosDriver(an_packet);
+			case packet_id_euler_orientation_standard_deviation: eulerOrientSDRosDecoder(an_packet);
 				break;
 
 			case packet_id_raw_sensors: rawSensorsRosDecoder(an_packet);
@@ -1869,6 +1869,147 @@ void Driver::unixTimeRosDecoder(an_packet_t* an_packet) {
 }
 
 /**
+ * @brief Function to decode the Euler Orientation Standard Deviation ANPP Packet (ANPP.26).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::eulerOrientSDRosDecoder(an_packet_t* an_packet) {
+	euler_orientation_standard_deviation_packet_t euler_orientation_standard_deviation_packet;
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 26: \tMutex: L\tAccess: %d", P26_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_euler_orientation_standard_deviation_packet(&euler_orientation_standard_deviation_packet, an_packet) == 0)
+	 {
+		// IMU message
+		imu_msg_.orientation_covariance[0] = pow(euler_orientation_standard_deviation_packet.standard_deviation[0], 2);
+		imu_msg_.orientation_covariance[4] = pow(euler_orientation_standard_deviation_packet.standard_deviation[1], 2);
+		imu_msg_.orientation_covariance[8] = pow(euler_orientation_standard_deviation_packet.standard_deviation[2], 2);
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 26:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P26_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the Raw Sensor ANPP Packet (ANPP.28).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::rawSensorsRosDecoder(an_packet_t* an_packet) {
+	raw_sensors_packet_t raw_sensors_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+
+	RCLCPP_DEBUG(this->get_logger(), "Packet 28: \tMutex: L\tAccess: %d", P28_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	// Fill the messages
+	if(decode_raw_sensors_packet(&raw_sensors_packet, an_packet) == 0) {
+
+		// RAW MAGNETICFIELD VALUE FROM IMU
+		mag_field_msg_.header.frame_id = frame_id_;
+		mag_field_msg_.magnetic_field.x = raw_sensors_packet.magnetometers[0];
+		mag_field_msg_.magnetic_field.y = raw_sensors_packet.magnetometers[1];
+		mag_field_msg_.magnetic_field.z = raw_sensors_packet.magnetometers[2];
+
+		imu_raw_msg_.header.frame_id = frame_id_;
+		imu_raw_msg_.orientation_covariance[0] = -1; // Tell recievers that no orientation is sent.
+		imu_raw_msg_.linear_acceleration.x = raw_sensors_packet.accelerometers[0];
+		imu_raw_msg_.linear_acceleration.y = raw_sensors_packet.accelerometers[1];
+		imu_raw_msg_.linear_acceleration.z = raw_sensors_packet.accelerometers[2];
+		imu_raw_msg_.angular_velocity.x = raw_sensors_packet.gyroscopes[0];
+		imu_raw_msg_.angular_velocity.y = raw_sensors_packet.gyroscopes[1];
+		imu_raw_msg_.angular_velocity.z = raw_sensors_packet.gyroscopes[2];
+
+		// BAROMETRIC PRESSURE
+		baro_msg_.header.frame_id = frame_id_;
+		baro_msg_.fluid_pressure = raw_sensors_packet.pressure;
+
+		// TEMPERATURE
+		temp_msg_.header.frame_id = frame_id_;
+		temp_msg_.temperature = raw_sensors_packet.pressure_temperature;
+
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 28:\tMutex: U\tAccess: %d\tTimeLock: %ld μs", P28_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the ECEF Position ANPP Packet (ANPP.33).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::ecefPosRosDecoder(an_packet_t* an_packet) {
+	ecef_position_packet_t ecef_position_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 33:\tMutex: L\tAccess: %d", P33_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	// ECEF Position (in meters) Packet for Pose Message
+	if(decode_ecef_position_packet(&ecef_position_packet, an_packet) == 0)
+	 {
+		pose_msg_.position.x = ecef_position_packet.position[0];
+		pose_msg_.position.y = ecef_position_packet.position[1];
+		pose_msg_.position.z = ecef_position_packet.position[2];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 33:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P33_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the UTM Position ANPP Packet (ANPP.34).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::utmPosRosDecoder(an_packet_t* an_packet) {
+	utm_position_packet_t utm_position_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 34:\tMutex: L\tAccess: %d", P34_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	// UTM Position (in meters) Packet for Pose Message
+	if(decode_utm_position_packet(&utm_position_packet, an_packet) == 0)
+	 {
+		pose_msg_.position.x = utm_position_packet.position[1]; // Easting
+		pose_msg_.position.y = utm_position_packet.position[0]; // Northing
+		pose_msg_.position.z = utm_position_packet.position[2]; // Height
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 34:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P34_num_++, diff/1000);
+}
+
+/**
  * @brief Function to decode the Acceleration ANPP Packet (ANPP.37).
  *
  * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
@@ -1954,149 +2095,6 @@ void Driver::angularAccelRosDecoder(an_packet_t* an_packet) {
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 43:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P43_num_++, diff/1000);
 }
-/**
- * @brief Function to decode the ECEF Position ANPP Packet (ANPP.33).
- *
- * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
- * then using the publishing control variable, requests a publisher thread to publish the message.
- *
- * @param an_packet a pointer to an an_packet_t object which will be decoded.
- */
-void Driver::ecefPosRosDecoder(an_packet_t* an_packet) {
-	ecef_position_packet_t ecef_position_packet;
-
-	std::unique_lock<std::mutex> lock(messages_mutex_);
-	RCLCPP_DEBUG(this->get_logger(), "Packet 33:\tMutex: L\tAccess: %d", P33_num_);
-	// Debug timekeeper
-	auto time = this->get_clock().get()->now().nanoseconds();
-
-	// ECEF Position (in meters) Packet for Pose Message
-	if(decode_ecef_position_packet(&ecef_position_packet, an_packet) == 0)
-	 {
-		pose_msg_.position.x = ecef_position_packet.position[0];
-		pose_msg_.position.y = ecef_position_packet.position[1];
-		pose_msg_.position.z = ecef_position_packet.position[2];
-	}
-	// Now that work is complete notify an update for the publisher.
-	msg_write_done_ = true;
-	msg_cv_.notify_one();
-	auto diff = this->get_clock().get()->now().nanoseconds() - time;
-	RCLCPP_DEBUG(this->get_logger(), "Packet 33:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P33_num_++, diff/1000);
-}
-
-/**
- * @brief Function to decode the UTM Position ANPP Packet (ANPP.34).
- *
- * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
- * then using the publishing control variable, requests a publisher thread to publish the message.
- *
- * @param an_packet a pointer to an an_packet_t object which will be decoded.
- */
-void Driver::utmPosRosDecoder(an_packet_t* an_packet) {
-	utm_position_packet_t utm_position_packet;
-
-	std::unique_lock<std::mutex> lock(messages_mutex_);
-	RCLCPP_DEBUG(this->get_logger(), "Packet 34:\tMutex: L\tAccess: %d", P34_num_);
-	// Debug timekeeper
-	auto time = this->get_clock().get()->now().nanoseconds();
-
-	// UTM Position (in meters) Packet for Pose Message
-	if(decode_utm_position_packet(&utm_position_packet, an_packet) == 0)
-	 {
-		pose_msg_.position.x = utm_position_packet.position[1]; // Easting
-		pose_msg_.position.y = utm_position_packet.position[0]; // Northing
-		pose_msg_.position.z = utm_position_packet.position[2]; // Height
-	}
-	// Now that work is complete notify an update for the publisher.
-	msg_write_done_ = true;
-	msg_cv_.notify_one();
-	auto diff = this->get_clock().get()->now().nanoseconds() - time;
-	RCLCPP_DEBUG(this->get_logger(), "Packet 34:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P34_num_++, diff/1000);
-}
-
-/**
- * @brief Function to decode the Euler Orientation Standard Deviation ANPP Packet (ANPP.26).
- *
- * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
- * then using the publishing control variable, requests a publisher thread to publish the message.
- *
- * @param an_packet a pointer to an an_packet_t object which will be decoded.
- */
-void Driver::eulerOrientSDRosDriver(an_packet_t* an_packet) {
-	euler_orientation_standard_deviation_packet_t euler_orientation_standard_deviation_packet;
-	std::unique_lock<std::mutex> lock(messages_mutex_);
-	RCLCPP_DEBUG(this->get_logger(), "Packet 26: \tMutex: L\tAccess: %d", P26_num_);
-	// Debug timekeeper
-	auto time = this->get_clock().get()->now().nanoseconds();
-
-	if(decode_euler_orientation_standard_deviation_packet(&euler_orientation_standard_deviation_packet, an_packet) == 0)
-	 {
-		// IMU message
-		imu_msg_.orientation_covariance[0] = pow(euler_orientation_standard_deviation_packet.standard_deviation[0], 2);
-		imu_msg_.orientation_covariance[4] = pow(euler_orientation_standard_deviation_packet.standard_deviation[1], 2);
-		imu_msg_.orientation_covariance[8] = pow(euler_orientation_standard_deviation_packet.standard_deviation[2], 2);
-	}
-	// Now that work is complete notify an update for the publisher.
-	msg_write_done_ = true;
-	msg_cv_.notify_one();
-	// RCLCPP_DEBUG(this->get_logger(), "Raw: \tNotifying Complete\t%d", raw_num_++);
-	auto diff = this->get_clock().get()->now().nanoseconds() - time;
-	RCLCPP_DEBUG(this->get_logger(), "Packet 26:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P26_num_++, diff/1000);
-}
-
-/**
- * @brief Function to decode the Raw Sensor ANPP Packet (ANPP.28).
- *
- * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
- * then using the publishing control variable, requests a publisher thread to publish the message.
- *
- * @param an_packet a pointer to an an_packet_t object which will be decoded.
- */
-void Driver::rawSensorsRosDecoder(an_packet_t* an_packet) {
-	raw_sensors_packet_t raw_sensors_packet;
-
-	std::unique_lock<std::mutex> lock(messages_mutex_);
-
-	RCLCPP_DEBUG(this->get_logger(), "Packet 28: \tMutex: L\tAccess: %d", P28_num_);
-	// Debug timekeeper
-	auto time = this->get_clock().get()->now().nanoseconds();
-
-	// Fill the messages
-	if(decode_raw_sensors_packet(&raw_sensors_packet, an_packet) == 0) {
-
-		// RAW MAGNETICFIELD VALUE FROM IMU
-		mag_field_msg_.header.frame_id = frame_id_;
-		mag_field_msg_.magnetic_field.x = raw_sensors_packet.magnetometers[0];
-		mag_field_msg_.magnetic_field.y = raw_sensors_packet.magnetometers[1];
-		mag_field_msg_.magnetic_field.z = raw_sensors_packet.magnetometers[2];
-
-		imu_raw_msg_.header.frame_id = frame_id_;
-		imu_raw_msg_.orientation_covariance[0] = -1; // Tell recievers that no orientation is sent.
-		imu_raw_msg_.linear_acceleration.x = raw_sensors_packet.accelerometers[0];
-		imu_raw_msg_.linear_acceleration.y = raw_sensors_packet.accelerometers[1];
-		imu_raw_msg_.linear_acceleration.z = raw_sensors_packet.accelerometers[2];
-		imu_raw_msg_.angular_velocity.x = raw_sensors_packet.gyroscopes[0];
-		imu_raw_msg_.angular_velocity.y = raw_sensors_packet.gyroscopes[1];
-		imu_raw_msg_.angular_velocity.z = raw_sensors_packet.gyroscopes[2];
-
-		// BAROMETRIC PRESSURE
-		baro_msg_.header.frame_id = frame_id_;
-		baro_msg_.fluid_pressure = raw_sensors_packet.pressure;
-
-		// TEMPERATURE
-		temp_msg_.header.frame_id = frame_id_;
-		temp_msg_.temperature = raw_sensors_packet.pressure_temperature;
-
-	}
-	// Now that work is complete notify an update for the publisher.
-	msg_write_done_ = true;
-	msg_cv_.notify_one();
-	// RCLCPP_DEBUG(this->get_logger(), "Raw: \tNotifying Complete\t%d", raw_num_++);
-
-	auto diff = this->get_clock().get()->now().nanoseconds() - time;
-	RCLCPP_DEBUG(this->get_logger(), "Packet 28:\tMutex: U\tAccess: %d\tTimeLock: %ld μs", P28_num_++, diff/1000);
-}
-
 
 
 }// namespace adnav
