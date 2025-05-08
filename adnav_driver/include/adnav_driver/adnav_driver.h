@@ -314,6 +314,7 @@ class Driver : public rclcpp::Node  // Inheriting gives every "this->" as a poin
     void accelRosDecoder(an_packet_t* an_packet);
     void bodyAccelRosDecoder(an_packet_t* an_packet);
     void quatOrientationRosDecoder(an_packet_t* an_packet);
+    void angularVelocityRosDecoder(an_packet_t* an_packet);
     void angularAccelRosDecoder(an_packet_t* an_packet);
 };
 

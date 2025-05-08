@@ -1513,6 +1513,9 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_quaternion_orientation: quatOrientationRosDecoder(an_packet);
 				break;
 
+			case packet_id_angular_velocity: angularVelocityRosDecoder(an_packet);
+				break;
+
 			case packet_id_angular_acceleration: angularAccelRosDecoder(an_packet);
 				break;
 
@@ -2202,6 +2205,43 @@ void Driver::quatOrientationRosDecoder(an_packet_t* an_packet) {
 	msg_cv_.notify_one();
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 40:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P40_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the Angular Velocity ANPP Packet (ANPP.42).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::angularVelocityRosDecoder(an_packet_t* an_packet) {
+	angular_velocity_packet_t angular_velocity_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 42:\tMutex: L\tAccess: %d", P42_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_angular_velocity_packet(&angular_velocity_packet, an_packet) == 0)
+	 {
+		odom_msg_.twist.twist.angular.x = angular_velocity_packet.angular_velocity[0];
+		odom_msg_.twist.twist.angular.y = angular_velocity_packet.angular_velocity[1];
+		odom_msg_.twist.twist.angular.z = angular_velocity_packet.angular_velocity[2];
+		
+		imu_msg_.angular_velocity.x = angular_velocity_packet.angular_velocity[0];
+		imu_msg_.angular_velocity.y = angular_velocity_packet.angular_velocity[1];
+		imu_msg_.angular_velocity.z = angular_velocity_packet.angular_velocity[2];
+		
+		twist_msg_.angular.x = angular_velocity_packet.angular_velocity[0];
+		twist_msg_.angular.y = angular_velocity_packet.angular_velocity[1];
+		twist_msg_.angular.z = angular_velocity_packet.angular_velocity[2];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 42:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P42_num_++, diff/1000);
 }
 
 /**
