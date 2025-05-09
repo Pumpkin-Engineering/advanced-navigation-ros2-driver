@@ -2026,6 +2026,7 @@ void Driver::ecefPosRosDecoder(an_packet_t* an_packet) {
 		odom_msg_.pose.pose.position.x = ecef_position_packet.position[0];
 		odom_msg_.pose.pose.position.y = ecef_position_packet.position[1];
 		odom_msg_.pose.pose.position.z = ecef_position_packet.position[2];
+		odom_msg_.header.frame_id = "ECEF";
 	}
 	// Now that work is complete notify an update for the publisher.
 	msg_write_done_ = true;
@@ -2059,7 +2060,8 @@ void Driver::utmPosRosDecoder(an_packet_t* an_packet) {
 
 		odom_msg_.pose.pose.position.x = utm_position_packet.position[1]; // Easting
 		odom_msg_.pose.pose.position.y = utm_position_packet.position[0]; // Northing
-		odom_msg_.pose.pose.position.z = utm_position_packet.position[2]; // Height}
+		odom_msg_.pose.pose.position.z = utm_position_packet.position[2]; // Height
+		odom_msg_.header.frame_id = "UTM_" + utm_position_packet.zone_number + utm_position_packet.zone_char;
 	}
 	// Now that work is complete notify an update for the publisher.
 	msg_write_done_ = true;
