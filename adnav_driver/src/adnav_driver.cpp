@@ -1510,6 +1510,9 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_body_acceleration: bodyAccelRosDecoder(an_packet);
 				break;
 
+			case packet_id_euler_orientation: eulerOrientationRosDecoder(an_packet);
+				break;
+
 			case packet_id_quaternion_orientation: quatOrientationRosDecoder(an_packet);
 				break;
 
@@ -2167,6 +2170,52 @@ void Driver::bodyAccelRosDecoder(an_packet_t* an_packet) {
 	msg_cv_.notify_one();
 	auto diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Packet 38:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P38_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the Euler Orientation ANPP Packet (ANPP.39).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::eulerOrientationRosDecoder(an_packet_t* an_packet) {
+	euler_orientation_packet_t euler_orientation_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 39:\tMutex: L\tAccess: %d", P39_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_euler_orientation_packet(&euler_orientation_packet, an_packet) == 0)
+	 {
+		orientation_.setRPY(
+			euler_orientation_packet.orientation[0],
+			euler_orientation_packet.orientation[1],
+			M_PI/2.0f - euler_orientation_packet.orientation[2] // REP 103
+		);
+			
+		odom_msg_.pose.pose.orientation.x = orientation_[0];
+		odom_msg_.pose.pose.orientation.y = orientation_[1];
+		odom_msg_.pose.pose.orientation.z = orientation_[2];
+		odom_msg_.pose.pose.orientation.w = orientation_[3];
+		
+		pose_msg_.orientation.x = orientation_[0];
+		pose_msg_.orientation.y = orientation_[1];
+		pose_msg_.orientation.z = orientation_[2];
+		pose_msg_.orientation.w = orientation_[3];
+		
+		imu_msg_.orientation.x = orientation_[0];
+		imu_msg_.orientation.y = orientation_[1];
+		imu_msg_.orientation.z = orientation_[2];
+		imu_msg_.orientation.w = orientation_[3];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 39:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P39_num_++, diff/1000);
 }
 
 /**

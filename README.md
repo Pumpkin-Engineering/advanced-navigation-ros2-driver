@@ -17,6 +17,7 @@ This example is currently able to decode the following packets into ROS messages
 - ANPP 36: Body Velocity Packet
 - ANPP 37: Acceleration Packet
 - ANPP 38: Body Acceleration Packet
+- ANPP 39: Euler Orientation Packet
 - ANPP 40: Quaternion Orientation Packet
 - ANPP 42: Angular Velocity Packet
 - ANPP 43: Angular Acceleration Packet
