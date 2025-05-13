@@ -2064,7 +2064,8 @@ void Driver::utmPosRosDecoder(an_packet_t* an_packet) {
 		odom_msg_.pose.pose.position.x = utm_position_packet.position[1]; // Easting
 		odom_msg_.pose.pose.position.y = utm_position_packet.position[0]; // Northing
 		odom_msg_.pose.pose.position.z = utm_position_packet.position[2]; // Height
-		odom_msg_.header.frame_id = "UTM_" + utm_position_packet.zone_number + utm_position_packet.zone_char;
+		odom_msg_.header.frame_id = "utm_" + std::to_string(utm_position_packet.zone_number);
+		odom_msg_.header.frame_id += (utm_position_packet.zone_char >= 'N') ? 'n' : 's';
 	}
 	// Now that work is complete notify an update for the publisher.
 	msg_write_done_ = true;
