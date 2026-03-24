@@ -68,6 +68,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/accel_stamped.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
 #include <sensor_msgs/msg/temperature.hpp>
@@ -133,7 +134,7 @@ class Driver : public rclcpp::Node  // Inheriting gives every "this->" as a poin
 
  private:
     // Debug variables
-    int pub_num_ = 0, P28_num_ = 0, P20_num_ = 0, P26_num_ = 0, P33_num_ = 0, P34_num_ = 0, P0_num_ = 0;
+    int pub_num_ = 0, P28_num_ = 0, P20_num_ = 0, P26_num_ = 0, P33_num_ = 0, P34_num_ = 0, P37_num_ = 0,  P38_num_ = 0, P43_num_ = 0, P0_num_ = 0;
 
     // Defines what communication method to use, refer to adnav_driver_connection_e.
     int communication_state_;
@@ -171,6 +172,7 @@ class Driver : public rclcpp::Node  // Inheriting gives every "this->" as a poin
     sensor_msgs::msg::Temperature   temp_msg_;
     geometry_msgs::msg::Twist       twist_msg_;
     geometry_msgs::msg::Pose        pose_msg_;
+    geometry_msgs::msg::AccelStamped       accel_msg_;
     diagnostic_msgs::msg::DiagnosticStatus system_status_msg_;
     diagnostic_msgs::msg::DiagnosticStatus filter_status_msg_;
 
@@ -183,6 +185,7 @@ class Driver : public rclcpp::Node  // Inheriting gives every "this->" as a poin
     rclcpp::Publisher<sensor_msgs::msg::Temperature>::SharedPtr 			temperature_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr 				twist_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Pose>::SharedPtr 					pose_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::AccelStamped>::SharedPtr 					accel_pub_;
     rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticStatus>::SharedPtr 	system_status_pub_;
     rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticStatus>::SharedPtr 	filter_status_pub_;
 
@@ -299,6 +302,9 @@ class Driver : public rclcpp::Node  // Inheriting gives every "this->" as a poin
     void ecefPosRosDecoder(an_packet_t* an_packet);
     void utmPosRosDecoder(an_packet_t* an_packet);
     void eulerOrientSDRosDriver(an_packet_t* an_packet);
+    void accelRosDecoder(an_packet_t* an_packet);
+    void bodyAccelRosDecoder(an_packet_t* an_packet);
+    void angularAccelRosDecoder(an_packet_t* an_packet);
     void rawSensorsRosDecoder(an_packet_t* an_packet);
 };
 

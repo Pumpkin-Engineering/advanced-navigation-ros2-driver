@@ -12,6 +12,9 @@ This example is currently able to decode the following packets into ROS messages
 - ANPP 28: Raw Sensors Packet
 - ANPP 33: ECEF Position Packet
 - ANPP 34: UTM Position Packet
+- ANPP 37: Acceleration Packet
+- ANPP 38: Body Acceleration Packet
+- ANPP 43: Angular Acceleration Packet
 
 Further packets can be requested and logged, however without extension these will not be added to ROS Messages or the terminal.
 

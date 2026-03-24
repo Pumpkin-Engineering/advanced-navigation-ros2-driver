@@ -176,6 +176,7 @@ void Driver::createPublishers() {
 	temperature_pub_ = this->create_publisher<sensor_msgs::msg::Temperature>(std::string(node_name_ + "/temperature"), 10);
 	twist_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(std::string(node_name_ + "/twist"), 10);
 	pose_pub_ = this->create_publisher<geometry_msgs::msg::Pose>(std::string(node_name_ + "/pose"), 10);
+	accel_pub_ = this->create_publisher<geometry_msgs::msg::AccelStamped>(std::string(node_name_ + "/accel"), 10);
 	system_status_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticStatus>(std::string(node_name_ + "/system_status"), 10);
 	filter_status_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticStatus>(std::string(node_name_ + "/filter_status"), 10);
 }
@@ -552,6 +553,7 @@ void Driver::publishTimerCallback() {
 	// PUBLISH MESSAGES
 	nav_sat_fix_pub_->publish(nav_fix_msg_);
 	twist_pub_->publish(twist_msg_);
+	accel_pub_->publish(accel_msg_);
 	imu_pub_->publish(imu_msg_);
 	imu_raw_pub_->publish(imu_raw_msg_);
 	system_status_pub_->publish(system_status_msg_);
@@ -1089,6 +1091,7 @@ rcl_interfaces::msg::SetParametersResult Driver::validatePacketRequest(const rcl
 	}
 
 	bool position_packet_included = false;
+	bool acceleration_packet_included = false;
 
 	// Check all elements of the request array
 	for(unsigned int i = 0; i < parameter.as_integer_array().size(); i++) {
@@ -1108,7 +1111,13 @@ rcl_interfaces::msg::SetParametersResult Driver::validatePacketRequest(const rcl
 					ss << "\n[Error] ID: " << element << "\t is an additional position packet. Only one postion packet should be requested.\n";
 				}
 				position_packet_included = true;
-			}
+			} else if (element == packet_id_acceleration || element == packet_id_body_acceleration) {
+				if (acceleration_packet_included) { // acceleration message already requested
+					result.successful = false;
+					ss << "\n[Error] ID: " << element << "\t is an additional acceleration packet. Only one acceleration packet should be requested.\n";
+				}
+				acceleration_packet_included = true;
+			}	
 		} else { // If odd (Period)
 			if(element < MIN_PACKET_PERIOD || element > MAX_PACKET_PERIOD) {
 				result.successful = false;
@@ -1484,6 +1493,15 @@ void Driver::decodePackets(an_decoder_t &an_decoder, const int &bytes) {
 			case packet_id_utm_position: utmPosRosDecoder(an_packet);
 				break;
 
+			case packet_id_acceleration: accelRosDecoder(an_packet);
+				break;
+
+			case packet_id_body_acceleration: bodyAccelRosDecoder(an_packet);
+				break;
+
+			case packet_id_angular_acceleration: angularAccelRosDecoder(an_packet);
+				break;
+
 			case packet_id_euler_orientation_standard_deviation: eulerOrientSDRosDriver(an_packet);
 				break;
 
@@ -1812,6 +1830,92 @@ void Driver::systemStateRosDecoder(an_packet_t* an_packet) {
 	RCLCPP_DEBUG(this->get_logger(), "Packet 20:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P20_num_++, diff/1000);
 }
 
+/**
+ * @brief Function to decode the Acceleration ANPP Packet (ANPP.37).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::accelRosDecoder(an_packet_t* an_packet) {
+	acceleration_packet_t acceleration_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 37:\tMutex: L\tAccess: %d", P37_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_acceleration_packet(&acceleration_packet, an_packet) == 0)
+	 {
+		accel_msg_.accel.linear.x = acceleration_packet.acceleration[0];
+		accel_msg_.accel.linear.y = acceleration_packet.acceleration[1];
+		accel_msg_.accel.linear.z = acceleration_packet.acceleration[2];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 37:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P37_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the Body Acceleration ANPP Packet (ANPP.38).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::bodyAccelRosDecoder(an_packet_t* an_packet) {
+	body_acceleration_packet_t body_acceleration_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 38:\tMutex: L\tAccess: %d", P38_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_body_acceleration_packet(&body_acceleration_packet, an_packet) == 0)
+	 {
+		accel_msg_.accel.linear.x = body_acceleration_packet.acceleration[0];
+		accel_msg_.accel.linear.y = body_acceleration_packet.acceleration[1];
+		accel_msg_.accel.linear.z = body_acceleration_packet.acceleration[2];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 38:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P38_num_++, diff/1000);
+}
+
+/**
+ * @brief Function to decode the Angular Acceleration ANPP Packet (ANPP.43).
+ *
+ * This function accesses in a thread safe manner the class stored ROS messages, placed relevant information into them,
+ * then using the publishing control variable, requests a publisher thread to publish the message.
+ *
+ * @param an_packet a pointer to an an_packet_t object which will be decoded.
+ */
+void Driver::angularAccelRosDecoder(an_packet_t* an_packet) {
+	angular_acceleration_packet_t angular_acceleration_packet;
+
+	std::unique_lock<std::mutex> lock(messages_mutex_);
+	RCLCPP_DEBUG(this->get_logger(), "Packet 43:\tMutex: L\tAccess: %d", P43_num_);
+	// Debug timekeeper
+	auto time = this->get_clock().get()->now().nanoseconds();
+
+	if(decode_angular_acceleration_packet(&angular_acceleration_packet, an_packet) == 0)
+	 {
+		accel_msg_.accel.angular.x = angular_acceleration_packet.angular_acceleration[0];
+		accel_msg_.accel.angular.y = angular_acceleration_packet.angular_acceleration[1];
+		accel_msg_.accel.angular.z = angular_acceleration_packet.angular_acceleration[2];
+	}
+	// Now that work is complete notify an update for the publisher.
+	msg_write_done_ = true;
+	msg_cv_.notify_one();
+	auto diff = this->get_clock().get()->now().nanoseconds() - time;
+	RCLCPP_DEBUG(this->get_logger(), "Packet 43:\tMutex: U\tAccess: %d\tTimeLocked: %ld μs", P43_num_++, diff/1000);
+}
 /**
  * @brief Function to decode the ECEF Position ANPP Packet (ANPP.33).
  *
