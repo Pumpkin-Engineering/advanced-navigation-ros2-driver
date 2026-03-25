@@ -1,3 +1,0 @@
-[submodule "an-ros-common"]
-	path = an-ros-common
-	url = https://github.com/advanced-navigation/an-ros-common.git
