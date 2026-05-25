@@ -543,10 +543,15 @@ void Driver::publishTimerCallback() {
 			RCLCPP_DEBUG(this->get_logger(), "Publish Timeout");
 			if(time) diff = this->get_clock().get()->now().nanoseconds() - time;
 			RCLCPP_DEBUG(this->get_logger(), "PubTimeout:\tAccess: %d\tTimeWait: %ld μs", pub_num_, diff/1000);
+			timeout_counter_++;
+			if (timeout_counter_ > std::chrono::seconds(5) / publish_timer_interval_) {
+			    throw std::runtime_error("Too many failed attempts");
+			}
 			return;
 		}
 	}
 
+	timeout_counter_ = 0;
 	// Debug message to show how long it waited to be awoken.
 	if(time) diff = this->get_clock().get()->now().nanoseconds() - time;
 	RCLCPP_DEBUG(this->get_logger(), "Pub: \t\tMutex: L\tAccess: %d\tTimeWait: %ld μs", pub_num_, diff/1000);
