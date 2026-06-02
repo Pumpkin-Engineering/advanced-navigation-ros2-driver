@@ -2197,7 +2197,7 @@ void Driver::eulerOrientationRosDecoder(an_packet_t* an_packet) {
 	if(decode_euler_orientation_packet(&euler_orientation_packet, an_packet) == 0)
 	 {
 		orientation_.setRPY(
-			euler_orientation_packet.orientation[0],
+			M_PI + euler_orientation_packet.orientation[0],
 			euler_orientation_packet.orientation[1],
 			M_PI/2.0f - euler_orientation_packet.orientation[2] // REP 103
 		);
